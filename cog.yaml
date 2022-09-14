@@ -1,0 +1,10 @@
+build:
+  gpu: true
+  cuda: "11.6.2"
+  python_version: "3.10"
+  python_packages:
+    - "diffusers==0.3.0"
+    - "torch==1.12.1 --extra-index-url=https://download.pytorch.org/whl/cu116"
+    - "transformers==4.21.3"
+    - "git+https://github.com/LambdaLabsML/lambda-diffusers.git#egg=lambda-diffusers"
+predict: "predict.py:Predictor"
