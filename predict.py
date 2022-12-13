@@ -4,7 +4,7 @@ from typing import List
 import torch
 from PIL import Image, ImageFilter
 from cog import BasePredictor, Input, Path
-
+from torchvision import transforms
 
 from lambda_diffusers import StableDiffusionImageEmbedPipeline
 
@@ -31,17 +31,17 @@ class Predictor(BasePredictor):
         ),
         height: int = Input(
             description="Height of output image. Maximum size is 1024x768 or 768x1024 because of memory limits",
-            choices=[128, 256, 512, 768, 1024],
+            choices=[256, 512, 768, 1024],
             default=512,
         ),
         num_outputs: int = Input(
-            description="Number of images to output", choices=[1, 4], default=1
+            description="Number of images to output", choices=[1, 2, 4], default=1
         ),
         num_inference_steps: int = Input(
             description="Number of denoising steps", ge=1, le=50, default=25
         ),
         guidance_scale: float = Input(
-            description="Scale for classifier-free guidance", ge=1, le=20, default=7.5
+            description="Scale for classifier-free guidance", ge=1, le=20, default=3.0
         ),
         seed: int = Input(
             description="Random seed. Leave blank to randomize the seed", default=None
@@ -57,7 +57,19 @@ class Predictor(BasePredictor):
                 "Maximum size is 1024x768 or 768x1024 pixels, because of memory limits. Please select a lower width or height."
             )
 
-        inp = Image.open(input_image).convert("RGB")
+        tform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(
+            (224, 224),
+            interpolation=transforms.InterpolationMode.BICUBIC,
+            antialias=False,
+            ),
+            transforms.Normalize(
+              [0.48145466, 0.4578275, 0.40821073],
+              [0.26862954, 0.26130258, 0.27577711]),
+        ])
+        inp = tform(input_im).to(device)
+        
         generator = torch.Generator("cuda").manual_seed(seed)
         output = self.pipe(
             input_image=[inp] * num_outputs,
