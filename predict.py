@@ -4,9 +4,8 @@ from typing import List
 import torch
 from PIL import Image, ImageFilter
 from cog import BasePredictor, Input, Path
-
-
-from lambda_diffusers import StableDiffusionImageEmbedPipeline
+from torchvision import transforms
+from diffusers import StableDiffusionImageVariationPipeline
 
 CACHE_DIR = "diffusers-cache"
 
@@ -14,7 +13,7 @@ class Predictor(BasePredictor):
     def setup(self):
         """Load the model into memory to make running multiple predictions efficient"""
         print("Loading pipeline...")
-        self.pipe = StableDiffusionImageEmbedPipeline.from_pretrained(
+        self.pipe = StableDiffusionImageVariationPipeline.from_pretrained(
             "lambdalabs/sd-image-variations-diffusers",
             cache_dir=CACHE_DIR,
             torch_dtype=torch.float16,
@@ -44,10 +43,22 @@ class Predictor(BasePredictor):
         print(f"Using seed: {seed}")
 
 
-        inp = Image.open(input_image).convert("RGB")
+        tform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(
+            (224, 224),
+            interpolation=transforms.InterpolationMode.BICUBIC,
+            antialias=False,
+            ),
+            transforms.Normalize(
+              [0.48145466, 0.4578275, 0.40821073],
+              [0.26862954, 0.26130258, 0.27577711]),
+        ])
+        inp = tform(Image.open(input_image)).to("cuda")
+
         generator = torch.Generator("cuda").manual_seed(seed)
         output = self.pipe(
-            input_image=[inp] * num_outputs,
+            inp.tile(num_outputs,1,1,1),
             guidance_scale=guidance_scale,
             generator=generator,
             num_inference_steps=num_inference_steps,
@@ -57,7 +68,7 @@ class Predictor(BasePredictor):
                 output["sample"][i] = output["sample"][i].filter(ImageFilter.GaussianBlur(50))
 
         output_paths = []
-        for i, sample in enumerate(output["sample"]):
+        for i, sample in enumerate(output["images"]):
             output_path = f"/tmp/out-{i}.png"
             sample.save(output_path)
             output_paths.append(Path(output_path))
